@@ -422,10 +422,16 @@ operating system records.
     step is also a third independent confirmation that the relayed path reports
     `play_status=stop` with an empty `title` while audio is really flowing.
 
-    **What remains under this item is the write side only**: `SetSavePreset`,
-    `SetRemovePreset` and `SetMovePreset`, none of them yet tried on hardware, so a station
-    found by browsing still cannot be kept. That is the same write-side probing as item 14,
-    and the browsing screen is the natural place to call it from.
+    **Write side implemented and unit-tested 2026-09-12** (`tunein.save_tunein_preset`,
+    `remove_tunein_preset`, `move_tunein_preset`; CLI as `--tunein-save`, `--tunein-remove`,
+    `--tunein-move` in `radio_cli.py`). **Still untried on the physical M5** - none of the three
+    has hardware evidence yet, `SetMovePreset`'s `movedirection` argument has an unknown meaning
+    and range, and `SetRemovePreset` has no undo, so the safe probing order from
+    `WAM_PROTOCOL.md` (dump `--tunein-list` first, move between two adjacent `my` entries before
+    anything touching slots 0-2, remove last) is still owed before this can be called done. That
+    hardware pass is the same write-side probing as item 14. No Android equivalent exists yet
+    (`SamsungTuneIn.kt` has no matching commands) - the browsing screen is the natural place to
+    call it from once it lands there too.
 
     ~~**Open, small, and asked for while testing on 2026-08-19: the mobile radio screen has no
     stop button.**~~ **Wired up 2026-08-19 and refined from the 2026-08-20 measurements.**

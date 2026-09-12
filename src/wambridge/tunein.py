@@ -275,3 +275,73 @@ def play_tunein_preset(
         timeout=timeout,
         api_type="CPM",
     )
+
+
+def _validate_preset_index(value: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError("Preset index must be an integer")
+    if value < 0:
+        raise ValueError("Preset index must not be negative")
+    return value
+
+
+def save_tunein_preset(
+    speaker_ip: str,
+    *,
+    port: int = DEFAULT_PORT,
+    timeout: float = 5.0,
+) -> WamResponse:
+    """Save whatever station is currently selected as a new preset.
+
+    ``SetSavePreset`` takes no arguments at all (docs/WAM_PROTOCOL.md) - it saves whatever
+    the speaker currently has selected, not a station this call names.
+    """
+    return request(speaker_ip, "SetSavePreset", port=port, timeout=timeout, api_type="CPM")
+
+
+def remove_tunein_preset(
+    speaker_ip: str,
+    preset_index: int,
+    *,
+    port: int = DEFAULT_PORT,
+    timeout: float = 5.0,
+) -> WamResponse:
+    """Remove one preset by index. There is no undo (docs/WAM_PROTOCOL.md)."""
+    index = _validate_preset_index(preset_index)
+    return request(
+        speaker_ip,
+        "SetRemovePreset",
+        [("presetindex", index, "dec")],
+        port=port,
+        timeout=timeout,
+        api_type="CPM",
+    )
+
+
+def move_tunein_preset(
+    speaker_ip: str,
+    from_index: int,
+    to_index: int,
+    direction: int,
+    *,
+    port: int = DEFAULT_PORT,
+    timeout: float = 5.0,
+) -> WamResponse:
+    """Move a preset between positions.
+
+    ``movedirection``'s meaning and valid range are undocumented (docs/WAM_PROTOCOL.md) - it is
+    passed through as a plain int rather than validated, since no hardware evidence exists yet
+    for what values it accepts.
+    """
+    return request(
+        speaker_ip,
+        "SetMovePreset",
+        [
+            ("presetfromindex", _validate_preset_index(from_index), "dec"),
+            ("presettoindex", _validate_preset_index(to_index), "dec"),
+            ("movedirection", int(direction), "dec"),
+        ],
+        port=port,
+        timeout=timeout,
+        api_type="CPM",
+    )

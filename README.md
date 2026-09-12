@@ -253,8 +253,17 @@ wambridge --device M5 --tunein-play 0 --volume 3
 wambridge --device M5 --tunein-play "Radio Paradise" --volume 3
 ```
 
-Changing the speaker's TuneIn account or preset list still belongs to Samsung's
-plugin because no reliable write API is known.
+Presets can also be written from here, untested on hardware so far - back up
+`--tunein-list` first, since `--tunein-remove` has no undo:
+
+```powershell
+wambridge --device M5 --tunein-save
+wambridge --device M5 --tunein-remove 3
+wambridge --device M5 --tunein-move 1 2 0
+```
+
+Android has no equivalent yet; writing presets from the phone still goes
+through Samsung's own app.
 
 ## Browsing and searching TuneIn
 

@@ -17,7 +17,7 @@ from .catalogue import (
     search,
     station_detail,
 )
-from .cli_common import configure_logging
+from .cli_common import bounded_int, configure_logging
 from .profiles import ProfileError, ProfileStore
 from .samsung import (
     WamApiError,
@@ -39,8 +39,11 @@ from .stream import StreamError, continuous_source
 from .tunein import (
     find_tunein_preset,
     get_tunein_presets,
+    move_tunein_preset,
     play_tunein_preset,
+    remove_tunein_preset,
     resolve_tunein_station,
+    save_tunein_preset,
 )
 
 LOGGER = logging.getLogger("wambridge")
@@ -114,6 +117,27 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="QUERY",
         help="Search the TuneIn catalogue by name",
     )
+    radio.add_argument(
+        "--tunein-save",
+        action="store_true",
+        help="Save whatever station is currently selected as a new native TuneIn preset",
+    )
+    radio.add_argument(
+        "--tunein-remove",
+        type=bounded_int("preset index", minimum=0),
+        metavar="PRESET_INDEX",
+        help="Remove one native TuneIn preset by index. There is no undo",
+    )
+    radio.add_argument(
+        "--tunein-move",
+        nargs=3,
+        type=int,
+        metavar=("FROM_INDEX", "TO_INDEX", "DIRECTION"),
+        help=(
+            "Move a native TuneIn preset. DIRECTION's meaning and valid range are "
+            "undocumented; try small values and re-read --tunein-list to see the effect"
+        ),
+    )
     parser.add_argument(
         "--tunein-start",
         type=int,
@@ -145,6 +169,9 @@ def _radio_action(args: argparse.Namespace) -> bool:
             # An empty string is a real value here: it means the catalogue root.
             args.tunein_browse is not None,
             args.tunein_search,
+            args.tunein_save,
+            args.tunein_remove is not None,
+            args.tunein_move,
         )
     )
 
@@ -172,6 +199,39 @@ def _print_tunein_presets(
     port: int,
 ) -> int:
     presets = get_tunein_presets(speaker_ip, port=port)
+    if not presets:
+        print("No TuneIn presets returned by Samsung WAM")
+        return 0
+    for preset in presets:
+        print(f"{preset.content_id}\t{preset.kind}\t{preset.title}")
+    return 0
+
+
+def _print_tunein_presets_after_write(
+    speaker_ip: str,
+    *,
+    port: int,
+    attempts: int = 3,
+    settle: float = 1.0,
+) -> int:
+    """Re-read presets after a write, retrying an empty answer.
+
+    The reply to a preset write is not proof of what happened (docs/WAM_PROTOCOL.md says to
+    re-read --tunein-list; DEVELOPMENT_STATUS.md item 14 records SetPlayPreset always replying
+    with an unrelated event even on success). The CPM subsystem can also go briefly silent under
+    a fast sequence of calls and answer empty while recovering, same as catalogue.py's page
+    fetch - so an empty list right after a write is retried rather than trusted immediately.
+    """
+    if attempts < 1:
+        raise ValueError("attempts must be at least 1")
+    presets = []
+    for attempt in range(attempts):
+        presets = get_tunein_presets(speaker_ip, port=port)
+        if presets:
+            break
+        if attempt + 1 < attempts:
+            LOGGER.debug("Empty preset list after write, retrying")
+            sleep(settle)
     if not presets:
         print("No TuneIn presets returned by Samsung WAM")
         return 0
@@ -452,6 +512,8 @@ def run(args: argparse.Namespace) -> int:
         raise RuntimeError(
             "A radio action cannot be combined with another control action"
         )
+    if args.tunein_move and (args.tunein_move[0] < 0 or args.tunein_move[1] < 0):
+        raise RuntimeError("--tunein-move indices must not be negative")
 
     station_store = StationStore(args.stations_config)
     if args.radio_add:
@@ -515,6 +577,37 @@ def run(args: argparse.Namespace) -> int:
             query=args.tunein_search,
             start_index=args.tunein_start,
         )
+    if args.tunein_save:
+        try:
+            save_tunein_preset(speaker_ip, port=speaker_port)
+        except WamApiError as error:
+            LOGGER.error("SetSavePreset failed: %s", error)
+            _print_tunein_presets_after_write(speaker_ip, port=speaker_port)
+            raise
+        print("Sent SetSavePreset. Resulting presets:")
+        return _print_tunein_presets_after_write(speaker_ip, port=speaker_port)
+    if args.tunein_remove is not None:
+        try:
+            remove_tunein_preset(speaker_ip, args.tunein_remove, port=speaker_port)
+        except WamApiError as error:
+            LOGGER.error("SetRemovePreset failed: %s", error)
+            _print_tunein_presets_after_write(speaker_ip, port=speaker_port)
+            raise
+        print(f"Sent SetRemovePreset for index {args.tunein_remove}. Resulting presets:")
+        return _print_tunein_presets_after_write(speaker_ip, port=speaker_port)
+    if args.tunein_move:
+        from_index, to_index, direction = args.tunein_move
+        try:
+            move_tunein_preset(speaker_ip, from_index, to_index, direction, port=speaker_port)
+        except WamApiError as error:
+            LOGGER.error("SetMovePreset failed: %s", error)
+            _print_tunein_presets_after_write(speaker_ip, port=speaker_port)
+            raise
+        print(
+            f"Sent SetMovePreset ({from_index} -> {to_index}, direction {direction}). "
+            "Resulting presets:"
+        )
+        return _print_tunein_presets_after_write(speaker_ip, port=speaker_port)
     return _play_tunein_safely(args, speaker_ip, speaker_port)
 
 

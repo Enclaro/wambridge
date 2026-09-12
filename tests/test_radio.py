@@ -2,7 +2,15 @@ from argparse import Namespace
 from unittest import TestCase
 from unittest.mock import patch
 
-from wambridge.radio_cli import _play_custom_station, _play_tunein_safely, build_parser
+from wambridge.radio_cli import (
+    _play_custom_station,
+    _play_tunein_safely,
+    _print_tunein_presets_after_write,
+    _radio_action,
+    build_parser,
+    run,
+)
+from wambridge.samsung import WamApiError
 from wambridge.stations import RadioStation
 from wambridge.stream import StreamError
 from wambridge.tunein import WamPreset
@@ -133,3 +141,96 @@ class RadioControlCliTests(TestCase):
             [call.args[1] for call in mute_mock.call_args_list],
             [True, True],
         )
+
+
+class TuneInPresetWriteCliTests(TestCase):
+    def test_tunein_save_flag_parses(self) -> None:
+        args = build_parser().parse_args(["--tunein-save"])
+        self.assertTrue(args.tunein_save)
+
+    def test_tunein_remove_flag_parses(self) -> None:
+        args = build_parser().parse_args(["--tunein-remove", "3"])
+        self.assertEqual(args.tunein_remove, 3)
+
+    def test_tunein_remove_flag_rejects_negative(self) -> None:
+        with self.assertRaises(SystemExit):
+            build_parser().parse_args(["--tunein-remove", "-1"])
+
+    def test_tunein_move_flag_parses(self) -> None:
+        args = build_parser().parse_args(["--tunein-move", "1", "2", "0"])
+        self.assertEqual(args.tunein_move, [1, 2, 0])
+
+    def test_radio_action_recognises_the_three_new_flags(self) -> None:
+        base = dict(
+            radio_add=None,
+            radio_import=None,
+            radio_list=False,
+            radio_remove=None,
+            radio_play=None,
+            tunein_list=False,
+            tunein_play=None,
+            tunein_browse=None,
+            tunein_search=None,
+            tunein_save=False,
+            tunein_remove=None,
+            tunein_move=None,
+        )
+        self.assertTrue(_radio_action(Namespace(**{**base, "tunein_save": True})))
+        self.assertTrue(_radio_action(Namespace(**{**base, "tunein_remove": 0})))
+        self.assertTrue(_radio_action(Namespace(**{**base, "tunein_move": [1, 2, 0]})))
+        self.assertFalse(_radio_action(Namespace(**base)))
+
+    @patch("wambridge.radio_cli.sleep")
+    @patch("wambridge.radio_cli.get_tunein_presets")
+    def test_reread_after_write_retries_on_empty(self, presets_mock, sleep_mock) -> None:
+        preset = WamPreset(content_id="1", title="Custom", kind="my")
+        presets_mock.side_effect = [[], [], [preset]]
+
+        result = _print_tunein_presets_after_write("10.0.0.118", port=55001, settle=0.0)
+
+        self.assertEqual(result, 0)
+        self.assertEqual(presets_mock.call_count, 3)
+        self.assertEqual(sleep_mock.call_count, 2)
+
+    @patch("wambridge.radio_cli.sleep")
+    @patch("wambridge.radio_cli.get_tunein_presets", return_value=[])
+    def test_reread_after_write_gives_up_after_attempts(self, presets_mock, sleep_mock) -> None:
+        result = _print_tunein_presets_after_write(
+            "10.0.0.118", port=55001, attempts=2, settle=0.0
+        )
+
+        self.assertEqual(result, 0)
+        self.assertEqual(presets_mock.call_count, 2)
+        self.assertEqual(sleep_mock.call_count, 1)
+
+    def test_reread_after_write_rejects_non_positive_attempts(self) -> None:
+        with self.assertRaisesRegex(ValueError, "at least 1"):
+            _print_tunein_presets_after_write("10.0.0.118", port=55001, attempts=0)
+
+    def test_tunein_move_rejects_negative_indices_before_speaker_contact(self) -> None:
+        args = build_parser().parse_args(["--tunein-move", "-1", "2", "0"])
+
+        with self.assertRaisesRegex(RuntimeError, "must not be negative"):
+            run(args)
+
+    @patch("wambridge.radio_cli._print_tunein_presets_after_write")
+    @patch("wambridge.radio_cli.save_tunein_preset", side_effect=WamApiError("boom"))
+    @patch("wambridge.radio_cli.probe")
+    @patch("wambridge.radio_cli.cli.select_speaker", return_value=("10.0.0.118", 55001))
+    @patch("wambridge.radio_cli.ProfileStore")
+    @patch("wambridge.radio_cli.StationStore")
+    def test_write_failure_still_reads_back_presets(
+        self,
+        _station_store_mock,
+        _profile_store_mock,
+        _select_speaker_mock,
+        _probe_mock,
+        _save_mock,
+        reread_mock,
+    ) -> None:
+        args = build_parser().parse_args(["--tunein-save"])
+
+        with self.assertRaisesRegex(WamApiError, "boom"):
+            run(args)
+
+        reread_mock.assert_called_once_with("10.0.0.118", port=55001)

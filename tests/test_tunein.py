@@ -6,8 +6,11 @@ from wambridge.tunein import (
     WamPreset,
     find_tunein_preset,
     get_tunein_presets,
+    move_tunein_preset,
     parse_tunein_presets,
     play_tunein_preset,
+    remove_tunein_preset,
+    save_tunein_preset,
 )
 
 
@@ -89,3 +92,69 @@ class TuneInPresetTests(TestCase):
             timeout=25.0,
             api_type="CPM",
         )
+
+    @patch("wambridge.tunein.request")
+    @patch("wambridge.tunein.select_tunein")
+    def test_saves_preset_with_no_arguments(self, select_mock, request_mock) -> None:
+        request_mock.return_value = WamResponse(method="SavePreset", result="ok", body="")
+
+        save_tunein_preset("10.0.0.118")
+
+        select_mock.assert_called_once_with("10.0.0.118", port=55001, timeout=5.0)
+        request_mock.assert_called_once_with(
+            "10.0.0.118",
+            "SetSavePreset",
+            port=55001,
+            timeout=5.0,
+            api_type="CPM",
+        )
+
+    @patch("wambridge.tunein.request")
+    @patch("wambridge.tunein.select_tunein")
+    def test_removes_preset_by_index(self, select_mock, request_mock) -> None:
+        request_mock.return_value = WamResponse(method="RemovePreset", result="ok", body="")
+
+        remove_tunein_preset("10.0.0.118", 3)
+
+        select_mock.assert_called_once_with("10.0.0.118", port=55001, timeout=5.0)
+        request_mock.assert_called_once_with(
+            "10.0.0.118",
+            "SetRemovePreset",
+            [("presetindex", 3, "dec")],
+            port=55001,
+            timeout=5.0,
+            api_type="CPM",
+        )
+
+    def test_remove_preset_rejects_negative_index(self) -> None:
+        with self.assertRaises(ValueError):
+            remove_tunein_preset("10.0.0.118", -1)
+
+    def test_remove_preset_rejects_bool_index(self) -> None:
+        with self.assertRaises(ValueError):
+            remove_tunein_preset("10.0.0.118", True)
+
+    @patch("wambridge.tunein.request")
+    @patch("wambridge.tunein.select_tunein")
+    def test_moves_preset(self, select_mock, request_mock) -> None:
+        request_mock.return_value = WamResponse(method="MovePreset", result="ok", body="")
+
+        move_tunein_preset("10.0.0.118", 1, 2, 0)
+
+        select_mock.assert_called_once_with("10.0.0.118", port=55001, timeout=5.0)
+        request_mock.assert_called_once_with(
+            "10.0.0.118",
+            "SetMovePreset",
+            [
+                ("presetfromindex", 1, "dec"),
+                ("presettoindex", 2, "dec"),
+                ("movedirection", 0, "dec"),
+            ],
+            port=55001,
+            timeout=5.0,
+            api_type="CPM",
+        )
+
+    def test_move_preset_rejects_negative_indices(self) -> None:
+        with self.assertRaises(ValueError):
+            move_tunein_preset("10.0.0.118", -1, 2, 0)

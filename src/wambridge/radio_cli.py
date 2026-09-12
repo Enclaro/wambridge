@@ -510,6 +510,8 @@ def run(args: argparse.Namespace) -> int:
         raise RuntimeError(
             "A radio action cannot be combined with another control action"
         )
+    if args.tunein_move and (args.tunein_move[0] < 0 or args.tunein_move[1] < 0):
+        raise RuntimeError("--tunein-move indices must not be negative")
 
     station_store = StationStore(args.stations_config)
     if args.radio_add:
@@ -574,16 +576,31 @@ def run(args: argparse.Namespace) -> int:
             start_index=args.tunein_start,
         )
     if args.tunein_save:
-        save_tunein_preset(speaker_ip, port=speaker_port)
+        try:
+            save_tunein_preset(speaker_ip, port=speaker_port)
+        except WamApiError as error:
+            LOGGER.error("SetSavePreset failed: %s", error)
+            _print_tunein_presets_after_write(speaker_ip, port=speaker_port)
+            raise
         print("Sent SetSavePreset. Resulting presets:")
         return _print_tunein_presets_after_write(speaker_ip, port=speaker_port)
     if args.tunein_remove is not None:
-        remove_tunein_preset(speaker_ip, args.tunein_remove, port=speaker_port)
+        try:
+            remove_tunein_preset(speaker_ip, args.tunein_remove, port=speaker_port)
+        except WamApiError as error:
+            LOGGER.error("SetRemovePreset failed: %s", error)
+            _print_tunein_presets_after_write(speaker_ip, port=speaker_port)
+            raise
         print(f"Sent SetRemovePreset for index {args.tunein_remove}. Resulting presets:")
         return _print_tunein_presets_after_write(speaker_ip, port=speaker_port)
     if args.tunein_move:
         from_index, to_index, direction = args.tunein_move
-        move_tunein_preset(speaker_ip, from_index, to_index, direction, port=speaker_port)
+        try:
+            move_tunein_preset(speaker_ip, from_index, to_index, direction, port=speaker_port)
+        except WamApiError as error:
+            LOGGER.error("SetMovePreset failed: %s", error)
+            _print_tunein_presets_after_write(speaker_ip, port=speaker_port)
+            raise
         print(
             f"Sent SetMovePreset ({from_index} -> {to_index}, direction {direction}). "
             "Resulting presets:"

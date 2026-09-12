@@ -296,6 +296,7 @@ def save_tunein_preset(
     ``SetSavePreset`` takes no arguments at all (docs/WAM_PROTOCOL.md) - it saves whatever
     the speaker currently has selected, not a station this call names.
     """
+    select_tunein(speaker_ip, port=port, timeout=min(timeout, 10.0))
     return request(speaker_ip, "SetSavePreset", port=port, timeout=timeout, api_type="CPM")
 
 
@@ -308,6 +309,7 @@ def remove_tunein_preset(
 ) -> WamResponse:
     """Remove one preset by index. There is no undo (docs/WAM_PROTOCOL.md)."""
     index = _validate_preset_index(preset_index)
+    select_tunein(speaker_ip, port=port, timeout=min(timeout, 10.0))
     return request(
         speaker_ip,
         "SetRemovePreset",
@@ -333,12 +335,15 @@ def move_tunein_preset(
     passed through as a plain int rather than validated, since no hardware evidence exists yet
     for what values it accepts.
     """
+    validated_from = _validate_preset_index(from_index)
+    validated_to = _validate_preset_index(to_index)
+    select_tunein(speaker_ip, port=port, timeout=min(timeout, 10.0))
     return request(
         speaker_ip,
         "SetMovePreset",
         [
-            ("presetfromindex", _validate_preset_index(from_index), "dec"),
-            ("presettoindex", _validate_preset_index(to_index), "dec"),
+            ("presetfromindex", validated_from, "dec"),
+            ("presettoindex", validated_to, "dec"),
             ("movedirection", int(direction), "dec"),
         ],
         port=port,

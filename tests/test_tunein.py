@@ -94,11 +94,13 @@ class TuneInPresetTests(TestCase):
         )
 
     @patch("wambridge.tunein.request")
-    def test_saves_preset_with_no_arguments(self, request_mock) -> None:
+    @patch("wambridge.tunein.select_tunein")
+    def test_saves_preset_with_no_arguments(self, select_mock, request_mock) -> None:
         request_mock.return_value = WamResponse(method="SavePreset", result="ok", body="")
 
         save_tunein_preset("10.0.0.118")
 
+        select_mock.assert_called_once_with("10.0.0.118", port=55001, timeout=5.0)
         request_mock.assert_called_once_with(
             "10.0.0.118",
             "SetSavePreset",
@@ -108,11 +110,13 @@ class TuneInPresetTests(TestCase):
         )
 
     @patch("wambridge.tunein.request")
-    def test_removes_preset_by_index(self, request_mock) -> None:
+    @patch("wambridge.tunein.select_tunein")
+    def test_removes_preset_by_index(self, select_mock, request_mock) -> None:
         request_mock.return_value = WamResponse(method="RemovePreset", result="ok", body="")
 
         remove_tunein_preset("10.0.0.118", 3)
 
+        select_mock.assert_called_once_with("10.0.0.118", port=55001, timeout=5.0)
         request_mock.assert_called_once_with(
             "10.0.0.118",
             "SetRemovePreset",
@@ -131,11 +135,13 @@ class TuneInPresetTests(TestCase):
             remove_tunein_preset("10.0.0.118", True)
 
     @patch("wambridge.tunein.request")
-    def test_moves_preset(self, request_mock) -> None:
+    @patch("wambridge.tunein.select_tunein")
+    def test_moves_preset(self, select_mock, request_mock) -> None:
         request_mock.return_value = WamResponse(method="MovePreset", result="ok", body="")
 
         move_tunein_preset("10.0.0.118", 1, 2, 0)
 
+        select_mock.assert_called_once_with("10.0.0.118", port=55001, timeout=5.0)
         request_mock.assert_called_once_with(
             "10.0.0.118",
             "SetMovePreset",

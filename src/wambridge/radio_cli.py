@@ -222,6 +222,8 @@ def _print_tunein_presets_after_write(
     a fast sequence of calls and answer empty while recovering, same as catalogue.py's page
     fetch - so an empty list right after a write is retried rather than trusted immediately.
     """
+    if attempts < 1:
+        raise ValueError("attempts must be at least 1")
     presets = []
     for attempt in range(attempts):
         presets = get_tunein_presets(speaker_ip, port=port)

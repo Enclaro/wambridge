@@ -203,6 +203,10 @@ class TuneInPresetWriteCliTests(TestCase):
         self.assertEqual(presets_mock.call_count, 2)
         self.assertEqual(sleep_mock.call_count, 1)
 
+    def test_reread_after_write_rejects_non_positive_attempts(self) -> None:
+        with self.assertRaisesRegex(ValueError, "at least 1"):
+            _print_tunein_presets_after_write("10.0.0.118", port=55001, attempts=0)
+
     def test_tunein_move_rejects_negative_indices_before_speaker_contact(self) -> None:
         args = build_parser().parse_args(["--tunein-move", "-1", "2", "0"])
 

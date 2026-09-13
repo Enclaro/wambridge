@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 
 from wambridge.profiles import ProfileError
 from wambridge.samsung import WamApiError
-from wambridge.share import UnsupportedMediaError
+from wambridge.share import DEFAULT_SHARE_PORT, UnsupportedMediaError
 from wambridge.share_cli import (
     PlaybackWatcher,
     SpeakerState,
@@ -285,12 +285,12 @@ class MainTests(unittest.TestCase):
         ):
             main(["--device", "M5", "track.mp3"])
 
-        select_mock.assert_called_once()
+        self.assertEqual(select_mock.call_count, 1)
         start_mock.assert_called_once_with(
             "10.0.0.118",
             Path("track.mp3"),
             speaker_port=55001,
-            share_port=start_mock.call_args.kwargs["share_port"],
+            share_port=DEFAULT_SHARE_PORT,
             volume=None,
             timeout=20.0,
         )

@@ -410,12 +410,33 @@ operating system records.
     handler and its cleanup entirely. Confirmed by rerunning with `PYTHONUNBUFFERED=1` piped to
     a file and stopping the real `python.exe` PID directly.
 
-    **What's still missing is product integration**: `foobar/foo_out_wam.cpp` has zero
-    `SetSharePlaybackControl`/DLNA references, so the actual plugin still only offers the
-    universal PCM path for local files - no native duration, pause or seek. Wiring the proven
-    Python-side protocol into the C++ component is the real remaining work here, and per
-    `AGENTS.md` needs the full physical checklist (complete track, stable seekbar, second
-    track, pause/resume, stop/change, clean shutdown) once attempted.
+    **What's still missing is product integration, and it is an architecture decision, not
+    just an untried code path**: `foobar/foo_out_wam.cpp` has zero `SetSharePlaybackControl`/
+    DLNA references, so the actual plugin still only offers the universal PCM path for local
+    files. `WamOutput` is an `output_v6` - it receives already-decoded PCM in `process_samples`
+    and has no access to `playable_location`/file path anywhere in the file (confirmed by
+    grep). The share/DLNA path instead needs the speaker to fetch the *original file* over
+    HTTP, which means the output component must not be in the signal path for those tracks at
+    all - a different foobar component type (a `play_callback`/`playback_control` integration
+    this codebase has never had), not a branch inside `WamOutput`. There is also no existing
+    transport abstraction to extend (everything is hardcoded in one file) and no measured seek
+    command on this path (`docs/WAM_PROTOCOL.md`'s share/DLNA section), so pause/seek there
+    needs new design, not a copy of the PCM path's wall-clock model.
+
+    A position/duration read was attempted 2026-09-13 as a request/response `MusicPlayTime`
+    call and caught in review before merge (PR #154, Devin): `docs/EVENT_LISTENER.md` lists
+    `MusicPlayTime` alongside `StartPlaybackEvent`/`MediaBufferStartEvent` as an **unsolicited
+    event**, and it is absent from `WAM_PROTOCOL.md`'s marked command vocabulary - sending its
+    method name as a one-shot request only times out. If position is wanted here it has to be
+    consumed off the persistent event connection (`wam_events.listen_events`), not polled, and
+    whether the share path actually emits it at all - the one capture of it sits next to
+    `ShuffleMode`/`MultiQueueList`, which reads like an official-app multi-queue session, not
+    the single-file share flow - is itself unmeasured. Leaving this as an open question for the
+    hardware session rather than shipping an unverified getter.
+
+    The SDK design call and the C++ work itself need a session with the owner, then
+    `AGENTS.md`'s full physical checklist (complete track, stable seekbar, second track,
+    pause/resume, stop/change, clean shutdown).
 11. ~~Add a proper foobar preferences page while retaining legacy INI compatibility.~~
     **Done** - `foobar/wam_preferences.cpp` implements `preferences_page_instance` in 524
     lines, and the INI keys still load. Struck 2026-08-19 during a claim-by-claim audit; it had

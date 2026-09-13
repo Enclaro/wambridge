@@ -394,6 +394,28 @@ operating system records.
    interval is roughly a quarter of an hour and it starts when the last program lets go, not
    when the audio stops.
 10. Reduce and reimplement the finite share path from its measured working form.
+    **The reimplementation happened 2026-08-05** (`src/wambridge/share.py`,
+    `share_cli.py`, console script `wambridge-share`) - a small optional layer with one
+    known-good attempt, no fallback ladder, exactly what PR #7's postmortem above asked for.
+    37 unit tests, hardened for security in PR #35.
+
+    **Hardware-validated end to end 2026-09-13**: `wambridge-share` served a local `.wav` over
+    HTTP to the physical M5, `SetSharePlaybackControl` started it, and `StartPlaybackEvent`
+    confirmed playback - the tool printed `Playing tone.wav. Press Ctrl+C to stop.` and kept
+    running until stopped. Two false negatives happened first and are worth recording as a
+    testing trap, not a speaker problem: `share_cli.main()`'s success path blocks forever on
+    `Ctrl+C`, but `print()` is fully block-buffered when stdout is not a TTY, so a harness
+    piping output saw nothing after `MediaBufferEndEvent` and looked hung; sending `SIGTERM`
+    (e.g. via a wrapping `timeout` command) instead of `SIGINT` skips the `KeyboardInterrupt`
+    handler and its cleanup entirely. Confirmed by rerunning with `PYTHONUNBUFFERED=1` piped to
+    a file and stopping the real `python.exe` PID directly.
+
+    **What's still missing is product integration**: `foobar/foo_out_wam.cpp` has zero
+    `SetSharePlaybackControl`/DLNA references, so the actual plugin still only offers the
+    universal PCM path for local files - no native duration, pause or seek. Wiring the proven
+    Python-side protocol into the C++ component is the real remaining work here, and per
+    `AGENTS.md` needs the full physical checklist (complete track, stable seekbar, second
+    track, pause/resume, stop/change, clean shutdown) once attempted.
 11. ~~Add a proper foobar preferences page while retaining legacy INI compatibility.~~
     **Done** - `foobar/wam_preferences.cpp` implements `preferences_page_instance` in 524
     lines, and the INI keys still load. Struck 2026-08-19 during a claim-by-claim audit; it had

@@ -64,6 +64,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           uv run wambridge-events --help | Out-Null
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          uv run wambridge-share --help | Out-Null
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build standalone helper
         shell: pwsh
@@ -97,6 +99,24 @@ jobs:
             tools/wambridge_control_entry.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & dist/control/wambridge-control.exe --help | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Build standalone share helper
+        shell: pwsh
+        run: |
+          uv run python -m PyInstaller `
+            --noconfirm `
+            --clean `
+            --onefile `
+            --name wambridge-share `
+            --distpath dist/share `
+            --workpath build/pyinstaller-share `
+            --specpath build/pyinstaller-share `
+            tools/wambridge_share_entry.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & dist/share/wambridge-share.exe --help | Out-Null
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
@@ -177,6 +197,10 @@ jobs:
           Copy-Item `
             dist/control/wambridge-control.exe `
             dist/component/wambridge-control/wambridge-control.exe
+          New-Item -ItemType Directory -Force dist/component/wambridge-share | Out-Null
+          Copy-Item `
+            dist/share/wambridge-share.exe `
+            dist/component/wambridge-share/wambridge-share.exe
           Push-Location dist/component
           7z a -tzip ../foo_out_wam.fb2k-component *
           $packed = $LASTEXITCODE
@@ -195,6 +219,7 @@ jobs:
           path: |
             dist/control/wambridge-control.exe
             dist/events/wambridge-events.exe
+            dist/share/wambridge-share.exe
             dist/foo_out_wam.dll
             dist/foo_out_wam.fb2k-component
             dist/wambridge-source.zip

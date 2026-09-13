@@ -18,8 +18,10 @@ import logging
 import threading
 from pathlib import Path
 
+from .cli_common import add_target_arguments, select_speaker
 from .discovery import local_ip_for
 from .identity import load_client_uuid
+from .profiles import ProfileError, ProfileStore
 from .samsung import (
     DEFAULT_PORT,
     WamApiError,
@@ -217,9 +219,8 @@ def build_parser() -> argparse.ArgumentParser:
         prog="wambridge-share",
         description="Play a local audio file on a Samsung WAM speaker.",
     )
-    parser.add_argument("speaker", help="Speaker IP address")
+    add_target_arguments(parser, port=DEFAULT_PORT)
     parser.add_argument("media", type=Path, help="Audio file to play")
-    parser.add_argument("--speaker-port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--share-port", type=int, default=DEFAULT_SHARE_PORT)
     parser.add_argument(
         "--volume",
@@ -237,15 +238,22 @@ def main(argv: list[str] | None = None) -> int:
         print("Volume must be a raw speaker step between 0 and 30.")
         return 2
     try:
+        speaker_ip, speaker_port = select_speaker(args, ProfileStore(args.config))
         server = start_share_playback(
-            args.speaker,
+            speaker_ip,
             args.media,
-            speaker_port=args.speaker_port,
+            speaker_port=speaker_port,
             share_port=args.share_port,
             volume=args.volume,
             timeout=args.timeout,
         )
-    except (FileNotFoundError, UnsupportedMediaError, ValueError, WamApiError) as error:
+    except (
+        FileNotFoundError,
+        UnsupportedMediaError,
+        ValueError,
+        WamApiError,
+        ProfileError,
+    ) as error:
         print(f"{error}")
         return 1
 

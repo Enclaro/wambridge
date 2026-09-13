@@ -12,6 +12,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstddef>
+#include <cstring>
 #include <cwchar>
 #include <deque>
 #include <mutex>
@@ -29,6 +30,7 @@ constexpr int kMaximumRawVolume = 30;
 constexpr int kMaximumLegacyVolume = 100;
 constexpr int kMaximumSleepTimerSeconds = 86400;
 constexpr size_t kMaximumLoggedOutput = 2000;
+constexpr DWORD kShareStopTimeoutMs = 2000;
 constexpr std::wstring_view kMenuSleepDeadlineKey{L"menu_sleep_timer_deadline"};
 
 std::mutex& sleep_timer_state_mutex() {
@@ -107,6 +109,14 @@ constexpr GUID kSafeVolumeGuid = {
     0x04c3,
     0x47ee,
     {0x89, 0x08, 0xb7, 0xf9, 0x52, 0xe3, 0x02, 0xf0},
+};
+
+// {9E5DD9EE-2E99-4EDB-890D-E8EE2F0973A7}
+constexpr GUID kSendToShareGuid = {
+    0x9e5dd9ee,
+    0x2e99,
+    0x4edb,
+    {0x89, 0x0d, 0xe8, 0xee, 0x2f, 0x09, 0x73, 0xa7},
 };
 
 struct MenuItem {
@@ -274,6 +284,21 @@ std::wstring control_helper_path() {
     if (directory.empty()) return {};
     const auto bundled = directory +
         L"\\wambridge-control\\wambridge-control.exe";
+    return file_exists(bundled) ? bundled : std::wstring{};
+}
+
+// Same shape as control_helper_path(): a configured override, else the bundled
+// path next to this component. wambridge-share is a separate helper because it
+// blocks for the life of the playback (it serves the file), unlike
+// wambridge-control's run-and-exit commands.
+std::wstring share_helper_path() {
+    const auto overridePath = environment_value(L"WAMBRIDGE_SHARE");
+    if (!overridePath.empty()) return overridePath;
+
+    const auto directory = module_directory();
+    if (directory.empty()) return {};
+    const auto bundled = directory +
+        L"\\wambridge-share\\wambridge-share.exe";
     return file_exists(bundled) ? bundled : std::wstring{};
 }
 
@@ -450,6 +475,89 @@ std::string compact_output(std::string output) {
         output += "...";
     }
     return output;
+}
+
+// Tracks the one wambridge-share helper currently serving a file, if any.
+// Unlike wambridge-control (run one command, wait, exit), wambridge-share
+// blocks for the life of the playback - it must be spawned without waiting,
+// and its handle kept around so a later stop can reach it. Only ever one at a
+// time: starting a new share replaces whatever was running, the same
+// single-owner rule this project already applies to the PCM path.
+struct ShareHelperState {
+    std::mutex mutex;
+    HANDLE process = nullptr;
+    HANDLE thread = nullptr;
+};
+
+ShareHelperState& share_helper_state() {
+    static ShareHelperState state;
+    return state;
+}
+
+void stop_share_helper() {
+    auto& state = share_helper_state();
+    std::lock_guard<std::mutex> lock(state.mutex);
+    if (state.process != nullptr) {
+        // TerminateProcess only requests termination - it returns before the
+        // process, and the local HTTP server port it was holding, are
+        // actually gone. Without waiting here, start_share_helper()'s
+        // immediate respawn can race the old helper for the same share port.
+        TerminateProcess(state.process, 0);
+        WaitForSingleObject(state.process, kShareStopTimeoutMs);
+    }
+    close_handle(state.process);
+    close_handle(state.thread);
+}
+
+void start_share_helper(const std::wstring& mediaPath) {
+    stop_share_helper();
+
+    const auto helper = share_helper_path();
+    if (helper.empty()) {
+        console::printf(
+            "%s: wambridge-share helper not found",
+            kComponentName
+        );
+        return;
+    }
+
+    std::wstring command = quoted(helper);
+    command += L" --device ";
+    command += quoted(configured_device());
+    command += L" ";
+    command += quoted(mediaPath);
+
+    std::vector<wchar_t> mutableCommand(command.begin(), command.end());
+    mutableCommand.push_back(L'\0');
+
+    STARTUPINFOW startupInfo{};
+    startupInfo.cb = sizeof(startupInfo);
+    PROCESS_INFORMATION processInfo{};
+
+    const BOOL created = CreateProcessW(
+        nullptr,
+        mutableCommand.data(),
+        nullptr,
+        nullptr,
+        FALSE,
+        CREATE_NO_WINDOW,
+        nullptr,
+        nullptr,
+        &startupInfo,
+        &processInfo
+    );
+    if (!created) {
+        console::printf(
+            "%s: could not start wambridge-share",
+            kComponentName
+        );
+        return;
+    }
+
+    auto& state = share_helper_state();
+    std::lock_guard<std::mutex> lock(state.mutex);
+    state.process = processInfo.hProcess;
+    state.thread = processInfo.hThread;
 }
 
 // The slider is dragged, not clicked. Sending every intermediate level would
@@ -929,6 +1037,7 @@ public:
         if (item.stopsFoobar) {
             static_api_ptr_t<playback_control> control;
             control->stop();
+            stop_share_helper();
         }
         control_dispatcher().enqueue(item.action);
     }
@@ -952,6 +1061,92 @@ mainmenu_group_popup_factory g_wamMenuGroup(
     "WAM Bridge"
 );
 mainmenu_commands_factory_t<WamMenuCommands> g_wamMenuCommands;
+
+// The one place in this component that ever sees a track's file path.
+// mainmenu_commands::execute (above) carries no track data at all - a
+// context menu item is the SDK's way to get a metadb_handle_list for the
+// current selection, which is why this is a contextmenu_item and not another
+// entry in the WAM Bridge popup.
+//
+// NOTE: this is the one class in this change not yet build-verified against
+// the real foobar2000 SDK headers (not present on this machine) - written to
+// the standard contextmenu_item_simple pattern used throughout public
+// foobar2000 components; confirm it compiles before trusting it.
+class WamShareContextMenu : public contextmenu_item_simple {
+public:
+    unsigned get_num_items() override { return 1; }
+
+    void get_item_name(unsigned, pfc::string_base& out) override {
+        out = "Send to WAM (Share)";
+    }
+
+    GUID get_item_guid(unsigned) override { return kSendToShareGuid; }
+
+    GUID get_parent() override { return contextmenu_groups::utilities; }
+
+    bool get_item_description(unsigned, pfc::string_base& out) override {
+        out = "Play this local file on the Samsung WAM speaker over the "
+            "share/DLNA transport, outside foobar's own output.";
+        return true;
+    }
+
+    // Hides the item entirely for anything but a single local file - shown
+    // over context_get_display rather than get_enabled_state, which only
+    // controls the item's default on/off preference, not per-selection
+    // availability.
+    bool context_get_display(
+        unsigned index,
+        metadb_handle_list_cref data,
+        pfc::string_base& out,
+        unsigned& displayflags,
+        const GUID& caller
+    ) override {
+        if (data.get_count() != 1) return false;
+        if (std::strncmp(data.get_item(0)->get_path(), "file://", 7) != 0) {
+            return false;
+        }
+        return contextmenu_item_simple::context_get_display(
+            index,
+            data,
+            out,
+            displayflags,
+            caller
+        );
+    }
+
+    void context_command(
+        unsigned,
+        metadb_handle_list_cref data,
+        const GUID&
+    ) override {
+        if (data.get_count() != 1) return;
+        const char* const path = data.get_item(0)->get_path();
+        if (std::strncmp(path, "file://", 7) != 0) return;
+
+        // Strip the "file://" scheme foobar stores locations under; the
+        // helper wants a plain Windows path.
+        const char* const localPath = path + 7;
+        const int wideLength =
+            MultiByteToWideChar(CP_UTF8, 0, localPath, -1, nullptr, 0);
+        if (wideLength <= 0) return;
+        // wideLength includes the terminating null; the buffer must be sized
+        // for it, then trimmed back to the true string length afterwards.
+        std::wstring widePath(static_cast<size_t>(wideLength), L'\0');
+        MultiByteToWideChar(
+            CP_UTF8,
+            0,
+            localPath,
+            -1,
+            widePath.data(),
+            wideLength
+        );
+        widePath.resize(static_cast<size_t>(wideLength - 1));
+
+        start_share_helper(widePath);
+    }
+};
+
+contextmenu_item_factory_t<WamShareContextMenu> g_wamShareContextMenu;
 
 }  // namespace
 

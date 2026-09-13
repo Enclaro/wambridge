@@ -9,8 +9,9 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from wambridge.profiles import ProfileError
 from wambridge.samsung import WamApiError
-from wambridge.share import UnsupportedMediaError
+from wambridge.share import DEFAULT_SHARE_PORT, UnsupportedMediaError
 from wambridge.share_cli import (
     PlaybackWatcher,
     SpeakerState,
@@ -222,10 +223,10 @@ class StartSharePlaybackTests(unittest.TestCase):
 
 class MainTests(unittest.TestCase):
     def test_parser_defaults(self) -> None:
-        args = build_parser().parse_args(["10.0.0.118", "track.mp3"])
+        args = build_parser().parse_args(["--speaker", "10.0.0.118", "track.mp3"])
 
         self.assertEqual(args.media, Path("track.mp3"))
-        self.assertEqual(args.speaker_port, 55001)
+        self.assertEqual(args.port, 55001)
         self.assertIsNone(args.volume)
         self.assertEqual(args.timeout, 20.0)
 
@@ -234,7 +235,7 @@ class MainTests(unittest.TestCase):
             patch("wambridge.share_cli.start_share_playback") as start_mock,
             redirect_stdout(io.StringIO()) as output,
         ):
-            status = main(["10.0.0.118", "track.mp3", "--volume", "31"])
+            status = main(["--speaker", "10.0.0.118", "track.mp3", "--volume", "31"])
 
         self.assertEqual(status, 2)
         self.assertIn("between 0 and 30", output.getvalue())
@@ -245,13 +246,14 @@ class MainTests(unittest.TestCase):
             FileNotFoundError("no such file"),
             UnsupportedMediaError("opus is rejected"),
             WamApiError("timed out"),
+            ProfileError("no saved device"),
         ):
             with self.subTest(error=type(error).__name__):
                 with (
                     patch("wambridge.share_cli.start_share_playback", side_effect=error),
                     redirect_stdout(io.StringIO()) as output,
                 ):
-                    self.assertEqual(main(["10.0.0.118", "track.mp3"]), 1)
+                    self.assertEqual(main(["--speaker", "10.0.0.118", "track.mp3"]), 1)
                 self.assertIn(str(error), output.getvalue())
 
     def test_ctrl_c_closes_the_server(self) -> None:
@@ -262,11 +264,36 @@ class MainTests(unittest.TestCase):
             patch("wambridge.share_cli.start_share_playback", return_value=server),
             redirect_stdout(io.StringIO()) as output,
         ):
-            status = main(["10.0.0.118", "track.mp3", "--volume", "3"])
+            status = main(["--speaker", "10.0.0.118", "track.mp3", "--volume", "3"])
 
         self.assertEqual(status, 0)
         self.assertIn("Stopping", output.getvalue())
         server.close.assert_called_once_with()
+
+    def test_resolves_a_saved_device_alias(self) -> None:
+        server = MagicMock()
+        server.requested.wait.side_effect = KeyboardInterrupt
+
+        with (
+            patch(
+                "wambridge.share_cli.select_speaker",
+                return_value=("10.0.0.118", 55001),
+            ) as select_mock,
+            patch(
+                "wambridge.share_cli.start_share_playback", return_value=server
+            ) as start_mock,
+        ):
+            main(["--device", "M5", "track.mp3"])
+
+        self.assertEqual(select_mock.call_count, 1)
+        start_mock.assert_called_once_with(
+            "10.0.0.118",
+            Path("track.mp3"),
+            speaker_port=55001,
+            share_port=DEFAULT_SHARE_PORT,
+            volume=None,
+            timeout=20.0,
+        )
 
 
 if __name__ == "__main__":

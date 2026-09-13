@@ -434,9 +434,27 @@ operating system records.
     the single-file share flow - is itself unmeasured. Leaving this as an open question for the
     hardware session rather than shipping an unverified getter.
 
-    The SDK design call and the C++ work itself need a session with the owner, then
-    `AGENTS.md`'s full physical checklist (complete track, stable seekbar, second track,
-    pause/resume, stop/change, clean shutdown).
+    **The SDK design call was made 2026-09-13, with the owner**: not an output device at all.
+    `foobar/wam_menu.cpp` gained a new `contextmenu_item`, "Send to WAM (Share)" - right-click a
+    local file, it spawns `wambridge-share` (now packaged as its own bundled helper, mirroring
+    `wambridge-control`) as a detached subprocess against the file's path, entirely outside
+    `WamOutput`/foobar's own transport. Control stays inside foobar rather than depending on
+    Samsung's own apps (the phone app is dead, the desktop app is unreliable and MP3-only, and
+    the speaker has no remote) - the existing `Emergency stop`/`Stop & mute` menu actions now
+    also reap the tracked share subprocess, so there is one obvious "stop everything" command
+    instead of a second one to remember. `share_cli.py` picked up the same `--device`/`--speaker`
+    resolution every other CLI here already uses (it previously took a raw positional IP, the one
+    tool out of step with the rest of the project). Pause, seek and a progress display are still
+    out of scope, per the unmeasured-seek finding above.
+
+    **Written but not yet verified**: no foobar2000 SDK or MSVC toolchain is set up on the
+    machine this landed on, so the new `contextmenu_item` class has not been compiled - it
+    follows the standard `contextmenu_item_simple` pattern from public foobar2000 components, but
+    needs a real build (CI or a local toolchain) before it can be trusted. The Python-side change
+    (`--device` resolution, the new `wambridge-share.exe` packaging) is unit-tested and green.
+    Hardware validation is unstarted and deliberately deferred to a session with the owner
+    present, per `AGENTS.md`'s full physical checklist (complete track, stable seekbar, second
+    track, pause/resume, stop/change, clean shutdown) - nothing here has touched the real M5.
 11. ~~Add a proper foobar preferences page while retaining legacy INI compatibility.~~
     **Done** - `foobar/wam_preferences.cpp` implements `preferences_page_instance` in 524
     lines, and the INI keys still load. Struck 2026-08-19 during a claim-by-claim audit; it had

@@ -125,6 +125,19 @@ class WamStatus:
     power_status: str | None
 
 
+@dataclass(frozen=True, slots=True)
+class SharePlayPosition:
+    """Elapsed and total seconds for the current share/DLNA playback.
+
+    Read-only. No seek command has ever been measured on this transport -
+    see docs/WAM_PROTOCOL.md's share/DLNA section - so this only reports
+    where playback is, it cannot move it.
+    """
+
+    elapsed_seconds: int
+    total_seconds: int
+
+
 def _attribute_value(value: str | int) -> str:
     """Escape one value for a double-quoted XML attribute.
 
@@ -1039,3 +1052,33 @@ def play_share(
         port=port,
         timeout=timeout,
     )
+
+
+def get_share_play_time(
+    speaker_ip: str,
+    *,
+    port: int = DEFAULT_PORT,
+    timeout: float = 5.0,
+) -> SharePlayPosition:
+    """Return elapsed/total seconds for the current share/DLNA playback.
+
+    ``MusicPlayTime`` is the one command docs/WAM_PROTOCOL.md records as
+    exposing position on this transport (``timelength``/``playtime``,
+    measured 2026-08-19). It is read-only - there is no matching seek
+    command on this path.
+    """
+    response = request(speaker_ip, "MusicPlayTime", port=port, timeout=timeout)
+    raw_total = _first_value(response, "timelength")
+    raw_elapsed = _first_value(response, "playtime")
+    if raw_total is None or raw_elapsed is None:
+        raise WamApiError("Samsung WAM response did not contain a play time")
+    try:
+        return SharePlayPosition(
+            elapsed_seconds=int(raw_elapsed),
+            total_seconds=int(raw_total),
+        )
+    except ValueError as error:
+        raise WamApiError(
+            f"Samsung WAM returned invalid play time: "
+            f"playtime={raw_elapsed!r} timelength={raw_total!r}"
+        ) from error

@@ -4,6 +4,7 @@ from urllib.parse import parse_qs, urlparse
 
 from wambridge.samsung import (
     SILENT_COMMAND_TIMEOUT,
+    SharePlayPosition,
     WamApiError,
     WamPlaybackStatus,
     WamResponse,
@@ -12,6 +13,7 @@ from wambridge.samsung import (
     get_mute,
     get_playback_status,
     get_power_status,
+    get_share_play_time,
     get_status,
     get_volume,
     normalize_device_id,
@@ -221,6 +223,49 @@ class SamsungCommandTests(TestCase):
 
         with self.assertRaisesRegex(WamApiError, "invalid volume"):
             get_volume("10.0.0.118")
+
+    @patch("wambridge.samsung.request")
+    def test_reads_share_play_time(self, request_mock) -> None:
+        request_mock.return_value = WamResponse(
+            method="MusicPlayTime",
+            result="ok",
+            body="",
+            values={"timelength": "220", "playtime": "37"},
+        )
+
+        position = get_share_play_time("10.0.0.118")
+
+        self.assertEqual(position, SharePlayPosition(elapsed_seconds=37, total_seconds=220))
+        request_mock.assert_called_once_with(
+            "10.0.0.118",
+            "MusicPlayTime",
+            port=55001,
+            timeout=5.0,
+        )
+
+    @patch("wambridge.samsung.request")
+    def test_rejects_missing_share_play_time(self, request_mock) -> None:
+        request_mock.return_value = WamResponse(
+            method="MusicPlayTime",
+            result="ok",
+            body="",
+            values={"timelength": "220"},
+        )
+
+        with self.assertRaisesRegex(WamApiError, "did not contain a play time"):
+            get_share_play_time("10.0.0.118")
+
+    @patch("wambridge.samsung.request")
+    def test_rejects_invalid_share_play_time(self, request_mock) -> None:
+        request_mock.return_value = WamResponse(
+            method="MusicPlayTime",
+            result="ok",
+            body="",
+            values={"timelength": "220", "playtime": "not-a-number"},
+        )
+
+        with self.assertRaisesRegex(WamApiError, "invalid play time"):
+            get_share_play_time("10.0.0.118")
 
     @patch("wambridge.samsung.request")
     def test_reads_mute_state(self, request_mock) -> None:

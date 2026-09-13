@@ -401,12 +401,12 @@ operating system records.
 12. Extend the radio side. **This item was wrong and stayed wrong for a while:** it claimed
     nothing lists what the speaker holds and a preset can only be recalled by a known number.
     `wambridge --tunein-list` has listed them all along, paginated and with the service
-    selected first, in `src/wambridge/tunein.py`. Two things are genuinely missing, both now
-    with commands attached in `WAM_PROTOCOL.md` and neither tried on hardware:
-    **writing presets** (`SetSavePreset`, `SetRemovePreset`, `SetMovePreset`, against a README
-    that still says no write API is known) and **browsing the catalogue** for stations not
-    already saved (`GetUpperRadioList`, `GetCurrentRadioList`, `SetSelectRadio`,
-    `GetGenreStations`, `SearchQuery`). A dockable panel still waits on output transport.
+    selected first, in `src/wambridge/tunein.py`. Two things were genuinely missing:
+    **writing presets** (`SetSavePreset`, `SetRemovePreset`, `SetMovePreset` - implemented,
+    see below) and **browsing the catalogue** for stations not already saved
+    (`GetUpperRadioList`, `GetCurrentRadioList`, `SetSelectRadio`, `GetGenreStations`,
+    `SearchQuery` - also done, see the read-only paragraph below). A dockable panel still
+    waits on output transport.
 
     Order agreed for the mobile side, largest gain first: ~~read-only browsing
     (`GetUpperRadioList`, `GetCurrentRadioList`), then search, then a browsing UI once the
@@ -424,14 +424,18 @@ operating system records.
 
     **Write side implemented and unit-tested 2026-09-12** (`tunein.save_tunein_preset`,
     `remove_tunein_preset`, `move_tunein_preset`; CLI as `--tunein-save`, `--tunein-remove`,
-    `--tunein-move` in `radio_cli.py`). **Still untried on the physical M5** - none of the three
-    has hardware evidence yet, `SetMovePreset`'s `movedirection` argument has an unknown meaning
-    and range, and `SetRemovePreset` has no undo, so the safe probing order from
-    `WAM_PROTOCOL.md` (dump `--tunein-list` first, move between two adjacent `my` entries before
-    anything touching slots 0-2, remove last) is still owed before this can be called done. That
-    hardware pass is the same write-side probing as item 14. No Android equivalent exists yet
-    (`SamsungTuneIn.kt` has no matching commands) - the browsing screen is the natural place to
-    call it from once it lands there too.
+    `--tunein-move` in `radio_cli.py`), merged in PR #153.
+
+    **`SetMovePreset` hardware-validated 2026-09-13.** `--tunein-move 10 11 0` on the physical
+    M5 swapped two adjacent `my` entries cleanly (no timeout, no wedge), moved back with the
+    same command, diffed clean against a `--tunein-list` backup taken first. **`movedirection=0`
+    swaps the two named indices** - confirmed for adjacent indices; still open whether a
+    non-adjacent pair shifts rather than swaps. **Still untried: a move crossing into the
+    `speaker` slots 0-2, `SetRemovePreset` (no undo) and `SetSavePreset`** (needs a station
+    already selected/browsed to) - deliberately left for a session with the user present, not
+    solo, given `SetRemovePreset` has no undo. That hardware pass is the same write-side probing
+    as item 14. No Android equivalent exists yet (`SamsungTuneIn.kt` has no matching commands) -
+    the browsing screen is the natural place to call it from once it lands there too.
 
     ~~**Open, small, and asked for while testing on 2026-08-19: the mobile radio screen has no
     stop button.**~~ **Wired up 2026-08-19 and refined from the 2026-08-20 measurements.**

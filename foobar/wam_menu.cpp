@@ -1076,18 +1076,36 @@ public:
 
     GUID get_item_guid(unsigned) override { return kSendToShareGuid; }
 
-    bool get_item_default_state(
-        unsigned,
-        metadb_handle_list_cref data,
-        unsigned& state
-    ) override {
-        state = 0;
-        if (data.get_count() != 1) return true;
-        if (std::strncmp(data.get_item(0)->get_path(), "file://", 7) != 0) {
-            return true;
-        }
-        state = contextmenu_item::FLAG_ENABLED;
+    GUID get_parent() override { return contextmenu_groups::utilities; }
+
+    bool get_item_description(unsigned, pfc::string_base& out) override {
+        out = "Play this local file on the Samsung WAM speaker over the "
+            "share/DLNA transport, outside foobar's own output.";
         return true;
+    }
+
+    // Hides the item entirely for anything but a single local file - shown
+    // over context_get_display rather than get_enabled_state, which only
+    // controls the item's default on/off preference, not per-selection
+    // availability.
+    bool context_get_display(
+        unsigned index,
+        metadb_handle_list_cref data,
+        pfc::string_base& out,
+        unsigned& displayflags,
+        const GUID& caller
+    ) override {
+        if (data.get_count() != 1) return false;
+        if (std::strncmp(data.get_item(0)->get_path(), "file://", 7) != 0) {
+            return false;
+        }
+        return contextmenu_item_simple::context_get_display(
+            index,
+            data,
+            out,
+            displayflags,
+            caller
+        );
     }
 
     void context_command(

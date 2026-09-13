@@ -24,6 +24,6 @@ identifiers:
   - type: doi
     value: "10.5281/zenodo.21877543"
     description: "Zenodo concept DOI for all archived versions."
-repository-code: "https://github.com/twojstar/wambridge"
-url: "https://github.com/twojstar/wambridge"
+repository-code: "https://github.com/2137x/wambridge"
+url: "https://github.com/2137x/wambridge"
 license: ISC

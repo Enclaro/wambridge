@@ -30,6 +30,7 @@ constexpr int kMaximumRawVolume = 30;
 constexpr int kMaximumLegacyVolume = 100;
 constexpr int kMaximumSleepTimerSeconds = 86400;
 constexpr size_t kMaximumLoggedOutput = 2000;
+constexpr DWORD kShareStopTimeoutMs = 2000;
 constexpr std::wstring_view kMenuSleepDeadlineKey{L"menu_sleep_timer_deadline"};
 
 std::mutex& sleep_timer_state_mutex() {
@@ -497,7 +498,12 @@ void stop_share_helper() {
     auto& state = share_helper_state();
     std::lock_guard<std::mutex> lock(state.mutex);
     if (state.process != nullptr) {
+        // TerminateProcess only requests termination - it returns before the
+        // process, and the local HTTP server port it was holding, are
+        // actually gone. Without waiting here, start_share_helper()'s
+        // immediate respawn can race the old helper for the same share port.
         TerminateProcess(state.process, 0);
+        WaitForSingleObject(state.process, kShareStopTimeoutMs);
     }
     close_handle(state.process);
     close_handle(state.thread);
@@ -1123,7 +1129,9 @@ public:
         const int wideLength =
             MultiByteToWideChar(CP_UTF8, 0, localPath, -1, nullptr, 0);
         if (wideLength <= 0) return;
-        std::wstring widePath(static_cast<size_t>(wideLength - 1), L'\0');
+        // wideLength includes the terminating null; the buffer must be sized
+        // for it, then trimmed back to the true string length afterwards.
+        std::wstring widePath(static_cast<size_t>(wideLength), L'\0');
         MultiByteToWideChar(
             CP_UTF8,
             0,
@@ -1132,6 +1140,7 @@ public:
             widePath.data(),
             wideLength
         );
+        widePath.resize(static_cast<size_t>(wideLength - 1));
 
         start_share_helper(widePath);
     }

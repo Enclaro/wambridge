@@ -494,14 +494,20 @@ ShareHelperState& share_helper_state() {
     return state;
 }
 
-void stop_share_helper() {
-    auto& state = share_helper_state();
-    std::lock_guard<std::mutex> lock(state.mutex);
+// Assumes state.mutex is already held. Split out so start_share_helper() can
+// terminate the previous helper and register the replacement as one atomic
+// step - doing those as two separately-locked calls (the original shape of
+// this code) let two near-simultaneous invocations each see "nothing to
+// kill" and both spawn, confirmed on the physical M5 2026-09-13: a single
+// context-menu click produced two live wambridge-share.exe processes, and
+// the second one's handle silently overwrote the first's, orphaning it -
+// nothing could reap it afterwards, not even a correctly-firing stop.
+void stop_share_helper_locked(ShareHelperState& state) {
     if (state.process != nullptr) {
         // TerminateProcess only requests termination - it returns before the
         // process, and the local HTTP server port it was holding, are
-        // actually gone. Without waiting here, start_share_helper()'s
-        // immediate respawn can race the old helper for the same share port.
+        // actually gone. Without waiting here, the immediate respawn below
+        // can race the old helper for the same share port.
         TerminateProcess(state.process, 0);
         WaitForSingleObject(state.process, kShareStopTimeoutMs);
     }
@@ -509,9 +515,13 @@ void stop_share_helper() {
     close_handle(state.thread);
 }
 
-void start_share_helper(const std::wstring& mediaPath) {
-    stop_share_helper();
+void stop_share_helper() {
+    auto& state = share_helper_state();
+    std::lock_guard<std::mutex> lock(state.mutex);
+    stop_share_helper_locked(state);
+}
 
+void start_share_helper(const std::wstring& mediaPath) {
     const auto helper = share_helper_path();
     if (helper.empty()) {
         console::printf(
@@ -529,6 +539,14 @@ void start_share_helper(const std::wstring& mediaPath) {
 
     std::vector<wchar_t> mutableCommand(command.begin(), command.end());
     mutableCommand.push_back(L'\0');
+
+    auto& state = share_helper_state();
+    std::lock_guard<std::mutex> lock(state.mutex);
+
+    // Terminate whatever was running and spawn the replacement under the same
+    // lock acquisition - see the comment on stop_share_helper_locked() above
+    // for why this must not be two separate locked calls.
+    stop_share_helper_locked(state);
 
     STARTUPINFOW startupInfo{};
     startupInfo.cb = sizeof(startupInfo);
@@ -554,8 +572,8 @@ void start_share_helper(const std::wstring& mediaPath) {
         return;
     }
 
-    auto& state = share_helper_state();
-    std::lock_guard<std::mutex> lock(state.mutex);
+    // Still under the same lock acquired above - do not re-lock state.mutex
+    // here, it is not recursive.
     state.process = processInfo.hProcess;
     state.thread = processInfo.hThread;
 }

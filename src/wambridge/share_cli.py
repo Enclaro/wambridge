@@ -41,6 +41,10 @@ LOGGER = logging.getLogger(__name__)
 
 SUCCESS_EVENT = "StartPlaybackEvent"
 PROGRESS_EVENTS = ("MediaBufferStartEvent", "MediaBufferEndEvent")
+# stop_playback() makes up to three sequential requests (status, pause, mute).
+# This is best-effort cleanup on the way out - an unreachable speaker must not
+# hold Ctrl+C for three times the default 10 s timeout.
+SHUTDOWN_RELEASE_TIMEOUT = 3.0
 FAILURE_EVENT = "ErrorEvent"
 
 
@@ -272,7 +276,12 @@ def main(argv: list[str] | None = None) -> int:
         # on the physical M5, never reach idle-dark on its own from that state.
         # standby=True additionally mutes, matching the PCM path's release().
         try:
-            stop_playback(speaker_ip, port=speaker_port, standby=True)
+            stop_playback(
+                speaker_ip,
+                port=speaker_port,
+                standby=True,
+                timeout=SHUTDOWN_RELEASE_TIMEOUT,
+            )
         except WamApiError as error:
             LOGGER.warning(
                 "Could not tell the speaker the share session ended: %s", error

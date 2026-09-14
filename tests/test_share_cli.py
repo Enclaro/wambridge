@@ -13,6 +13,7 @@ from wambridge.profiles import ProfileError
 from wambridge.samsung import WamApiError
 from wambridge.share import DEFAULT_SHARE_PORT, UnsupportedMediaError
 from wambridge.share_cli import (
+    SHUTDOWN_RELEASE_TIMEOUT,
     PlaybackWatcher,
     SpeakerState,
     build_parser,
@@ -270,7 +271,12 @@ class MainTests(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertIn("Stopping", output.getvalue())
         server.close.assert_called_once_with()
-        stop_mock.assert_called_once_with("10.0.0.118", port=55001, standby=True)
+        stop_mock.assert_called_once_with(
+            "10.0.0.118",
+            port=55001,
+            standby=True,
+            timeout=SHUTDOWN_RELEASE_TIMEOUT,
+        )
 
     def test_a_speaker_unreachable_at_shutdown_is_not_fatal(self) -> None:
         server = MagicMock()

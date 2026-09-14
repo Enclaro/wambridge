@@ -516,7 +516,9 @@ void stop_share_helper_locked(ShareHelperState& state) {
             kComponentName,
             static_cast<unsigned>(pid),
             terminated ? "ok" : "failed",
-            waitResult == WAIT_OBJECT_0 ? "exited" : "timed out"
+            waitResult == WAIT_OBJECT_0
+                ? "exited"
+                : waitResult == WAIT_TIMEOUT ? "timed out" : "wait failed"
         );
     } else {
         console::printf(

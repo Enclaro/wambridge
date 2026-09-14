@@ -356,9 +356,9 @@ internal object SamsungCatalogue {
         }
         return try {
             val builder = factory.newDocumentBuilder().apply {
-                entityResolver = EntityResolver { _, _ ->
+                setEntityResolver(EntityResolver { _, _ ->
                     throw IOException("External entities are not allowed in $what XML")
-                }
+                })
             }
             builder.parse(InputSource(StringReader(body))).documentElement
         } catch (error: Exception) {

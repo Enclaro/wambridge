@@ -504,12 +504,25 @@ ShareHelperState& share_helper_state() {
 // nothing could reap it afterwards, not even a correctly-firing stop.
 void stop_share_helper_locked(ShareHelperState& state) {
     if (state.process != nullptr) {
+        const DWORD pid = GetProcessId(state.process);
         // TerminateProcess only requests termination - it returns before the
         // process, and the local HTTP server port it was holding, are
         // actually gone. Without waiting here, the immediate respawn below
         // can race the old helper for the same share port.
-        TerminateProcess(state.process, 0);
-        WaitForSingleObject(state.process, kShareStopTimeoutMs);
+        const BOOL terminated = TerminateProcess(state.process, 0);
+        const DWORD waitResult = WaitForSingleObject(state.process, kShareStopTimeoutMs);
+        console::printf(
+            "%s: stopping wambridge-share (pid %u) - TerminateProcess=%s, wait=%s",
+            kComponentName,
+            static_cast<unsigned>(pid),
+            terminated ? "ok" : "failed",
+            waitResult == WAIT_OBJECT_0 ? "exited" : "timed out"
+        );
+    } else {
+        console::printf(
+            "%s: no wambridge-share helper tracked, nothing to stop",
+            kComponentName
+        );
     }
     close_handle(state.process);
     close_handle(state.thread);
@@ -576,6 +589,11 @@ void start_share_helper(const std::wstring& mediaPath) {
     // here, it is not recursive.
     state.process = processInfo.hProcess;
     state.thread = processInfo.hThread;
+    console::printf(
+        "%s: started wambridge-share (pid %u)",
+        kComponentName,
+        static_cast<unsigned>(processInfo.dwProcessId)
+    );
 }
 
 // The slider is dragged, not clicked. Sending every intermediate level would

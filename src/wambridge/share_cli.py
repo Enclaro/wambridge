@@ -32,6 +32,7 @@ from .samsung import (
     require_local_playback_mode,
     set_mute,
     set_volume,
+    stop_playback,
 )
 from .share import DEFAULT_SHARE_PORT, ShareServer, UnsupportedMediaError
 from .wam_events import listen_events
@@ -40,6 +41,10 @@ LOGGER = logging.getLogger(__name__)
 
 SUCCESS_EVENT = "StartPlaybackEvent"
 PROGRESS_EVENTS = ("MediaBufferStartEvent", "MediaBufferEndEvent")
+# stop_playback() makes up to three sequential requests (status, pause, mute).
+# This is best-effort cleanup on the way out - an unreachable speaker must not
+# hold Ctrl+C for three times the default 10 s timeout.
+SHUTDOWN_RELEASE_TIMEOUT = 3.0
 FAILURE_EVENT = "ErrorEvent"
 
 
@@ -265,6 +270,22 @@ def main(argv: list[str] | None = None) -> int:
         print("\nStopping")
     finally:
         server.close()
+        # Closing the local server drops the file the speaker was fetching, but
+        # the speaker itself is never told - it can be left believing a DLNA
+        # session is still live (submode=dlna, play_status=play) and, observed
+        # on the physical M5, never reach idle-dark on its own from that state.
+        # standby=True additionally mutes, matching the PCM path's release().
+        try:
+            stop_playback(
+                speaker_ip,
+                port=speaker_port,
+                standby=True,
+                timeout=SHUTDOWN_RELEASE_TIMEOUT,
+            )
+        except WamApiError as error:
+            LOGGER.warning(
+                "Could not tell the speaker the share session ended: %s", error
+            )
     return 0
 
 

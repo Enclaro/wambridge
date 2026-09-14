@@ -256,12 +256,13 @@ class MainTests(unittest.TestCase):
                     self.assertEqual(main(["--speaker", "10.0.0.118", "track.mp3"]), 1)
                 self.assertIn(str(error), output.getvalue())
 
-    def test_ctrl_c_closes_the_server(self) -> None:
+    def test_ctrl_c_closes_the_server_and_releases_the_speaker(self) -> None:
         server = MagicMock()
         server.requested.wait.side_effect = KeyboardInterrupt
 
         with (
             patch("wambridge.share_cli.start_share_playback", return_value=server),
+            patch("wambridge.share_cli.stop_playback") as stop_mock,
             redirect_stdout(io.StringIO()) as output,
         ):
             status = main(["--speaker", "10.0.0.118", "track.mp3", "--volume", "3"])
@@ -269,6 +270,23 @@ class MainTests(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertIn("Stopping", output.getvalue())
         server.close.assert_called_once_with()
+        stop_mock.assert_called_once_with("10.0.0.118", port=55001, standby=True)
+
+    def test_a_speaker_unreachable_at_shutdown_is_not_fatal(self) -> None:
+        server = MagicMock()
+        server.requested.wait.side_effect = KeyboardInterrupt
+
+        with (
+            patch("wambridge.share_cli.start_share_playback", return_value=server),
+            patch(
+                "wambridge.share_cli.stop_playback",
+                side_effect=WamApiError("timed out"),
+            ),
+            redirect_stdout(io.StringIO()),
+        ):
+            status = main(["--speaker", "10.0.0.118", "track.mp3"])
+
+        self.assertEqual(status, 0)
 
     def test_resolves_a_saved_device_alias(self) -> None:
         server = MagicMock()
@@ -282,6 +300,7 @@ class MainTests(unittest.TestCase):
             patch(
                 "wambridge.share_cli.start_share_playback", return_value=server
             ) as start_mock,
+            patch("wambridge.share_cli.stop_playback"),
         ):
             main(["--device", "M5", "track.mp3"])
 

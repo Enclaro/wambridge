@@ -133,7 +133,7 @@ internal object MobileUi {
         minHeight = dp(context, 48)
         minWidth = 0
         val (fill, ink, stroke) = when (kind) {
-            ButtonKind.PRIMARY -> Triple(R.color.wam_accent, android.R.color.white, R.color.wam_accent)
+            ButtonKind.PRIMARY -> Triple(R.color.wam_accent, R.color.wam_on_accent, R.color.wam_accent)
             ButtonKind.SECONDARY -> Triple(R.color.wam_surface_alt, R.color.wam_text, R.color.wam_surface_alt)
             ButtonKind.QUIET -> Triple(R.color.wam_surface, R.color.wam_text, R.color.wam_border)
             ButtonKind.DANGER -> Triple(R.color.wam_danger_soft, R.color.wam_danger, R.color.wam_danger_soft)

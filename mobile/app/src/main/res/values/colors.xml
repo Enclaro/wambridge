@@ -7,6 +7,7 @@
     <color name="wam_text">#15202B</color>
     <color name="wam_muted">#657382</color>
     <color name="wam_accent">#3568B8</color>
+    <color name="wam_on_accent">#FFFFFF</color>
     <color name="wam_accent_soft">#DCE7F7</color>
     <color name="wam_border">#D2DAE3</color>
     <color name="wam_danger">#B74452</color>

@@ -192,7 +192,7 @@ class TuneInActivity : Activity() {
             copy.addView(TextView(this).apply {
                 text = detail
                 textSize = 12f
-                setTextColor(Color.DKGRAY)
+                setTextColor(getColor(R.color.wam_muted))
                 maxLines = 2
             })
         }

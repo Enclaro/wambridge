@@ -7,6 +7,5 @@
         <item name="android:navigationBarColor">@color/wam_background</item>
         <item name="android:statusBarColor">@color/wam_background</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowLightNavigationBar">false</item>
     </style>
 </resources>

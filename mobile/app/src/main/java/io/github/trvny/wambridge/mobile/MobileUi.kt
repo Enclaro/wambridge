@@ -17,6 +17,7 @@ import android.widget.TextView
 
 internal object MobileUi {
     enum class ButtonKind { PRIMARY, SECONDARY, QUIET, DANGER }
+    enum class StatusKind { INFO, SUCCESS, ERROR }
 
     fun applyWindow(activity: Activity) {
         activity.window.statusBarColor = activity.getColor(R.color.wam_background)
@@ -77,14 +78,28 @@ internal object MobileUi {
     }
 
     fun status(context: Context, text: String = ""): TextView = TextView(context).apply {
-        this.text = text
         textSize = 14f
-        setTextColor(context.getColor(R.color.wam_text))
         setPadding(dp(context, 12), dp(context, 10), dp(context, 12), dp(context, 10))
-        background = rounded(
+        setStatus(this, text)
+    }
+
+    fun setStatus(
+        view: TextView,
+        text: String,
+        kind: StatusKind = StatusKind.INFO,
+    ) {
+        val context = view.context
+        val (fill, ink) = when (kind) {
+            StatusKind.INFO -> R.color.wam_accent_soft to R.color.wam_text
+            StatusKind.SUCCESS -> R.color.wam_success_soft to R.color.wam_success
+            StatusKind.ERROR -> R.color.wam_danger_soft to R.color.wam_danger
+        }
+        view.text = text
+        view.setTextColor(context.getColor(ink))
+        view.background = rounded(
             context,
-            fill = context.getColor(R.color.wam_accent_soft),
-            stroke = context.getColor(R.color.wam_accent_soft),
+            fill = context.getColor(fill),
+            stroke = context.getColor(fill),
             radiusDp = 14,
         )
     }

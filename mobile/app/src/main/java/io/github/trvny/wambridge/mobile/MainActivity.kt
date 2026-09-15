@@ -181,7 +181,7 @@ class MainActivity : Activity() {
         val inputRevision = speakerInputRevision.get()
         val generation = autoDiscoveryGeneration.incrementAndGet()
         MobileUi.setEnabled(discoverButton, false)
-        statusView.text = "Finding M5 on Wi-Fi…"
+        MobileUi.setStatus(statusView, "Finding M5 on Wi-Fi…")
 
         discoveryExecutor.execute {
             val result = runCatching {
@@ -228,24 +228,32 @@ class MainActivity : Activity() {
         result.fold(
             onSuccess = { showAutoDiscoveryTarget(previous, it) },
             onFailure = { error ->
-                statusView.text = "Automatic discovery failed: ${error.message ?: error.javaClass.simpleName}"
+                MobileUi.setStatus(
+                    statusView,
+                    "Automatic discovery failed: ${error.message ?: error.javaClass.simpleName}",
+                    MobileUi.StatusKind.ERROR,
+                )
             },
         )
     }
 
     private fun showAutoDiscoveryTarget(previous: String, result: SpeakerTarget.Resolution?) {
         if (result == null) {
-            statusView.text = "No WAM speaker found automatically. Tap Discover to retry."
+            MobileUi.setStatus(statusView, "No WAM speaker found automatically. Tap Discover to retry.")
             return
         }
         SpeakerTarget.rememberResolved(applicationContext, result)
         val target = result.ip
         speakerIp.setText(target)
-        statusView.text = if (target == previous) {
-            "M5 ready at $target."
-        } else {
-            "Found M5 at $target and updated the saved address."
-        }
+        MobileUi.setStatus(
+            statusView,
+            if (target == previous) {
+                "M5 ready at $target."
+            } else {
+                "Found M5 at $target and updated the saved address."
+            },
+            MobileUi.StatusKind.SUCCESS,
+        )
     }
 
     private fun discoverSpeaker(allowScan: Boolean) {
@@ -259,11 +267,14 @@ class MainActivity : Activity() {
         val inputRevision = speakerInputRevision.get()
         manualDiscoveryRunning = true
         MobileUi.setEnabled(discoverButton, false)
-        statusView.text = if (allowScan) {
-            "Discovering WAM speakers on Wi-Fi…"
-        } else {
-            "Looking for WAM speakers on Wi-Fi…"
-        }
+        MobileUi.setStatus(
+            statusView,
+            if (allowScan) {
+                "Discovering WAM speakers on Wi-Fi…"
+            } else {
+                "Looking for WAM speakers on Wi-Fi…"
+            },
+        )
 
         Thread({
             val result = SpeakerTarget.withDiscoveryLock {
@@ -275,16 +286,19 @@ class MainActivity : Activity() {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 MobileUi.setEnabled(discoverButton, true)
                 if (speakerInputRevision.get() != inputRevision) {
-                    statusView.text = "Discovery finished; keeping the address you edited."
+                    MobileUi.setStatus(statusView, "Discovery finished; keeping the address you edited.")
                     return@runOnUiThread
                 }
                 when {
                     speakers.isEmpty() && allowScan -> {
-                        statusView.text = emptyScanMessage(result.scan)
+                        MobileUi.setStatus(statusView, emptyScanMessage(result.scan))
                     }
 
                     speakers.isEmpty() -> {
-                        statusView.text = "No WAM speaker announced via SSDP. Tap Discover for LAN fallback or enter the IP manually."
+                        MobileUi.setStatus(
+                            statusView,
+                            "No WAM speaker announced via SSDP. Tap Discover for LAN fallback or enter the IP manually.",
+                        )
                     }
 
                     speakers.size == 1 -> useDiscoveredSpeaker(speakers.single())
@@ -327,13 +341,21 @@ class MainActivity : Activity() {
             .setItems(labels) { _, which -> useDiscoveredSpeaker(speakers[which]) }
             .setNegativeButton("Cancel", null)
             .show()
-        statusView.text = "Found ${speakers.size} WAM speakers."
+        MobileUi.setStatus(
+            statusView,
+            "Found ${speakers.size} WAM speakers.",
+            MobileUi.StatusKind.SUCCESS,
+        )
     }
 
     private fun useDiscoveredSpeaker(speaker: WamDiscovery.Speaker) {
         speakerIp.setText(speaker.ip)
         SpeakerTarget.rememberManualIp(applicationContext, speaker.ip)
-        statusView.text = "Found WAM speaker at ${speaker.ip} via ${speaker.source}."
+        MobileUi.setStatus(
+            statusView,
+            "Found WAM speaker at ${speaker.ip} via ${speaker.source}.",
+            MobileUi.StatusKind.SUCCESS,
+        )
     }
 
     private fun testSpeaker() {
@@ -347,17 +369,17 @@ class MainActivity : Activity() {
             return
         }
 
-        statusView.text = "Testing $value…"
+        MobileUi.setStatus(statusView, "Testing $value…")
         Thread({
             val reachable = SpeakerTarget.withDiscoveryLock {
                 SamsungWamChannel.probe(applicationContext, value)
             }
             runOnUiThread {
-                statusView.text = if (reachable) {
-                    "M5 answered at $value."
-                } else {
-                    "No WAM response from $value."
-                }
+                MobileUi.setStatus(
+                    statusView,
+                    if (reachable) "M5 answered at $value." else "No WAM response from $value.",
+                    if (reachable) MobileUi.StatusKind.SUCCESS else MobileUi.StatusKind.ERROR,
+                )
             }
         }, "wam-mobile-probe").start()
     }
@@ -376,7 +398,7 @@ class MainActivity : Activity() {
             action = RendererService.ACTION_START
         }
         startForegroundService(intent)
-        statusView.text = "Finding M5 and starting renderer…"
+        MobileUi.setStatus(statusView, "Finding M5 and starting renderer…")
         refreshUntilSettled()
     }
 
@@ -396,7 +418,15 @@ class MainActivity : Activity() {
             RendererService.Phase.STARTING, RendererService.Phase.STOPPING -> "◐"
             RendererService.Phase.STOPPED -> "○"
         }
-        statusView.text = "$marker ${RendererService.lastStatus}"
+        MobileUi.setStatus(
+            statusView,
+            "$marker ${RendererService.lastStatus}",
+            if (RendererService.phase == RendererService.Phase.RUNNING) {
+                MobileUi.StatusKind.SUCCESS
+            } else {
+                MobileUi.StatusKind.INFO
+            },
+        )
         if (::startRendererButton.isInitialized) {
             MobileUi.setEnabled(startRendererButton, !RendererService.active)
             MobileUi.setEnabled(stopRendererButton, RendererService.busy)

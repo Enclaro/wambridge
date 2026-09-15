@@ -22,10 +22,10 @@ Light roles:
 - action blue: `#3568B8`
 - soft action surface: `#DCE7F7`
 - border: `#D2DAE3`
-- connection/success green: `#277A57`
+- connection/success green: `#277A57` with soft success surface `#E5F3EB`
 - danger: `#B74452`
 
-Night mode uses the same resource names through `values-night`: background `#10151B`, surface `#171E26`, alternate surface `#232D38`, text `#EAF0F6`, action blue `#83AEFF`, border `#3A4654`, success `#71D1A2`.
+Night mode uses the same resource names through `values-night`: background `#10151B`, surface `#171E26`, alternate surface `#232D38`, text `#EAF0F6`, action blue `#83AEFF`, border `#3A4654`, success `#71D1A2` with soft success surface `#1D3B2E`.
 
 Blue means action/navigation. Green means healthy connection or successful state. Red means error/destructive action. State must also be expressed in text, not color alone.
 

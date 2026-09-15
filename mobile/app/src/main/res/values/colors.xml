@@ -13,4 +13,5 @@
     <color name="wam_danger">#B74452</color>
     <color name="wam_danger_soft">#FAE9EC</color>
     <color name="wam_success">#277A57</color>
+    <color name="wam_success_soft">#E5F3EB</color>
 </resources>

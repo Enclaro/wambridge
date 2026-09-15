@@ -239,7 +239,11 @@ class MainActivity : Activity() {
 
     private fun showAutoDiscoveryTarget(previous: String, result: SpeakerTarget.Resolution?) {
         if (result == null) {
-            MobileUi.setStatus(statusView, "No WAM speaker found automatically. Tap Discover to retry.")
+            MobileUi.setStatus(
+                statusView,
+                "No WAM speaker found automatically. Tap Discover to retry.",
+                MobileUi.StatusKind.ERROR,
+            )
             return
         }
         SpeakerTarget.rememberResolved(applicationContext, result)
@@ -291,13 +295,18 @@ class MainActivity : Activity() {
                 }
                 when {
                     speakers.isEmpty() && allowScan -> {
-                        MobileUi.setStatus(statusView, emptyScanMessage(result.scan))
+                        MobileUi.setStatus(
+                            statusView,
+                            emptyScanMessage(result.scan),
+                            MobileUi.StatusKind.ERROR,
+                        )
                     }
 
                     speakers.isEmpty() -> {
                         MobileUi.setStatus(
                             statusView,
                             "No WAM speaker announced via SSDP. Tap Discover for LAN fallback or enter the IP manually.",
+                            MobileUi.StatusKind.ERROR,
                         )
                     }
 

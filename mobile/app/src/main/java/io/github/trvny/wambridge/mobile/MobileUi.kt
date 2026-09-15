@@ -3,6 +3,7 @@ package io.github.trvny.wambridge.mobile
 import android.app.Activity
 import android.content.Context
 import android.content.res.ColorStateList
+import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -20,8 +21,13 @@ internal object MobileUi {
     fun applyWindow(activity: Activity) {
         activity.window.statusBarColor = activity.getColor(R.color.wam_background)
         activity.window.navigationBarColor = activity.getColor(R.color.wam_background)
+        val nightMode = activity.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         activity.window.decorView.systemUiVisibility =
-            View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+            if (nightMode == Configuration.UI_MODE_NIGHT_YES) {
+                0
+            } else {
+                View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+            }
     }
 
     fun page(context: Context): LinearLayout = LinearLayout(context).apply {

@@ -121,7 +121,7 @@ class TuneInActivity : Activity() {
     private fun loadPresets() {
         setButtonsEnabled(false)
         presetsView.removeAllViews()
-        statusView.text = "Finding M5 and reading TuneIn presets…"
+        MobileUi.setStatus(statusView, "Finding M5 and reading TuneIn presets…")
 
         Thread({
             val result = runCatching {
@@ -134,7 +134,11 @@ class TuneInActivity : Activity() {
                 result.fold(
                     onSuccess = { (_, presets) -> showPresets(presets) },
                     onFailure = { error ->
-                        statusView.text = "Could not read TuneIn: ${error.message ?: error.javaClass.simpleName}"
+                        MobileUi.setStatus(
+                            statusView,
+                            "Could not read TuneIn: ${error.message ?: error.javaClass.simpleName}",
+                            MobileUi.StatusKind.ERROR,
+                        )
                     },
                 )
             }
@@ -144,10 +148,14 @@ class TuneInActivity : Activity() {
     private fun showPresets(presets: List<SamsungTuneIn.Preset>) {
         presetsView.removeAllViews()
         if (presets.isEmpty()) {
-            statusView.text = "The speaker returned no TuneIn presets."
+            MobileUi.setStatus(statusView, "The speaker returned no TuneIn presets.")
             return
         }
-        statusView.text = "${presets.size} preset${if (presets.size == 1) "" else "s"} ready."
+        MobileUi.setStatus(
+            statusView,
+            "${presets.size} preset${if (presets.size == 1) "" else "s"} ready.",
+            MobileUi.StatusKind.SUCCESS,
+        )
         presets.forEach { preset -> presetsView.addView(presetCard(preset)) }
     }
 
@@ -203,7 +211,7 @@ class TuneInActivity : Activity() {
 
     private fun playPreset(preset: SamsungTuneIn.Preset) {
         setButtonsEnabled(false)
-        statusView.text = "Starting ${preset.title}…"
+        MobileUi.setStatus(statusView, "Starting ${preset.title}…")
 
         Thread({
             val result = runCatching {
@@ -215,12 +223,20 @@ class TuneInActivity : Activity() {
                 setButtonsEnabled(true)
                 result.fold(
                     onSuccess = {
-                        statusView.text = "Playing · ${preset.title}"
+                        MobileUi.setStatus(
+                            statusView,
+                            "Playing · ${preset.title}",
+                            MobileUi.StatusKind.SUCCESS,
+                        )
                         volumeView.text = "Volume 3/30"
                         playPauseButton.text = "Pause"
                     },
                     onFailure = { error ->
-                        statusView.text = "TuneIn start failed; speaker kept muted: ${error.message ?: error.javaClass.simpleName}"
+                        MobileUi.setStatus(
+                            statusView,
+                            "TuneIn start failed; speaker kept muted: ${error.message ?: error.javaClass.simpleName}",
+                            MobileUi.StatusKind.ERROR,
+                        )
                     },
                 )
             }
@@ -274,7 +290,7 @@ class TuneInActivity : Activity() {
         onSuccess: (String) -> Unit = {},
     ) {
         setButtonsEnabled(false)
-        statusView.text = progress
+        MobileUi.setStatus(statusView, progress)
         Thread({
             val result = runCatching {
                 val target = resolveSpeaker(verifySaved = false)
@@ -285,10 +301,14 @@ class TuneInActivity : Activity() {
                 result.fold(
                     onSuccess = { message ->
                         onSuccess(message)
-                        statusView.text = message
+                        MobileUi.setStatus(statusView, message)
                     },
                     onFailure = { error ->
-                        statusView.text = error.message ?: error.javaClass.simpleName
+                        MobileUi.setStatus(
+                            statusView,
+                            error.message ?: error.javaClass.simpleName,
+                            MobileUi.StatusKind.ERROR,
+                        )
                     },
                 )
             }
@@ -297,7 +317,7 @@ class TuneInActivity : Activity() {
 
     private fun stopPlayback(finishAfter: Boolean = false) {
         setButtonsEnabled(false)
-        statusView.text = "Stopping TuneIn…"
+        MobileUi.setStatus(statusView, "Stopping TuneIn…")
 
         Thread({
             val result = runCatching {
@@ -309,11 +329,15 @@ class TuneInActivity : Activity() {
                 setButtonsEnabled(true)
                 result.fold(
                     onSuccess = { report ->
-                        statusView.text = report
+                        MobileUi.setStatus(statusView, report, MobileUi.StatusKind.SUCCESS)
                         playPauseButton.text = "Play / pause"
                     },
                     onFailure = { error ->
-                        statusView.text = "Could not stop playback: ${error.message ?: error.javaClass.simpleName}"
+                        MobileUi.setStatus(
+                            statusView,
+                            "Could not stop playback: ${error.message ?: error.javaClass.simpleName}",
+                            MobileUi.StatusKind.ERROR,
+                        )
                     },
                 )
                 if (finishAfter) finish()

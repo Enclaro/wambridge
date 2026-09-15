@@ -158,7 +158,7 @@ class CatalogueActivity : Activity() {
     private fun runSearch() {
         val query = searchInput.text.toString().trim()
         if (query.isEmpty()) {
-            statusView.text = "Type something to search for."
+            MobileUi.setStatus(statusView, "Type something to search for.")
             return
         }
         onSpeaker("Searching for $query…") { context, ip ->
@@ -187,14 +187,14 @@ class CatalogueActivity : Activity() {
         work: (Context, String) -> SamsungCatalogue.Page,
     ) {
         if (busy) {
-            statusView.text = "Still working on the last request…"
+            MobileUi.setStatus(statusView, "Still working on the last request…")
             return
         }
         // The application context, not this activity: the request outlives a rotation
         // or a back press, and holding the activity from a background thread leaks it.
         val appContext = applicationContext
         busy = true
-        statusView.text = message
+        MobileUi.setStatus(statusView, message)
         // Process-scoped, not per-activity: `busy` dies with the instance, so a
         // rotation mid-request would let the recreated activity open the root while
         // the old thread is still walking the cursor, and the speaker owns only one.
@@ -227,8 +227,11 @@ class CatalogueActivity : Activity() {
                         render()
                     },
                     onFailure = { error ->
-                        statusView.text =
-                            error.message ?: "Catalogue request failed (${error.javaClass.simpleName})"
+                        MobileUi.setStatus(
+                            statusView,
+                            error.message ?: "Catalogue request failed (${error.javaClass.simpleName})",
+                            MobileUi.StatusKind.ERROR,
+                        )
                     },
                 )
             }
@@ -241,7 +244,7 @@ class CatalogueActivity : Activity() {
         val current = page
         entriesView.removeAllViews()
         if (current == null) {
-            statusView.text = "Nothing loaded."
+            MobileUi.setStatus(statusView, "Nothing loaded.")
             return
         }
 
@@ -253,10 +256,10 @@ class CatalogueActivity : Activity() {
             if (current.hasMore) View.VISIBLE else View.GONE
 
         if (current.entries.isEmpty()) {
-            statusView.text = "This level is empty."
+            MobileUi.setStatus(statusView, "This level is empty.")
             return
         }
-        statusView.text = ""
+        MobileUi.setStatus(statusView, "")
 
         current.entries.forEach { entry ->
             entriesView.addView(rowFor(entry))
@@ -295,7 +298,11 @@ class CatalogueActivity : Activity() {
         if (tuneInId.isNullOrBlank()) {
             // isStation already excludes this, so reaching it means the listing
             // changed shape rather than that the user did anything wrong.
-            statusView.text = "${entry.title} has no TuneIn id to play."
+            MobileUi.setStatus(
+                statusView,
+                "${entry.title} has no TuneIn id to play.",
+                MobileUi.StatusKind.ERROR,
+            )
             return
         }
         startForegroundService(
@@ -305,9 +312,9 @@ class CatalogueActivity : Activity() {
                 putExtra(RadioService.EXTRA_TUNEIN_ID, tuneInId)
             },
         )
-        statusView.text = "Starting ${entry.title}…"
+        MobileUi.setStatus(statusView, "Starting ${entry.title}…")
         window.decorView.postDelayed({
-            if (!busy) statusView.text = "● ${RadioService.lastStatus}"
+            if (!busy) MobileUi.setStatus(statusView, "● ${RadioService.lastStatus}")
         }, 1_200)
     }
 

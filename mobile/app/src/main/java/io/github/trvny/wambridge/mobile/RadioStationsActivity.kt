@@ -121,11 +121,19 @@ class RadioStationsActivity : Activity() {
                 aliasInput.text.clear()
                 urlsInput.text.clear()
                 tuneInInput.text.clear()
-                statusView.text = "Saved ${station.alias}."
+                MobileUi.setStatus(
+                    statusView,
+                    "Saved ${station.alias}.",
+                    MobileUi.StatusKind.SUCCESS,
+                )
                 refreshStations()
             },
             onFailure = { error ->
-                statusView.text = error.message ?: "Could not save station"
+                MobileUi.setStatus(
+                    statusView,
+                    error.message ?: "Could not save station",
+                    MobileUi.StatusKind.ERROR,
+                )
             },
         )
     }
@@ -161,7 +169,7 @@ class RadioStationsActivity : Activity() {
                     aliasInput.setText(station.alias)
                     urlsInput.setText(station.urls.joinToString("\n"))
                     tuneInInput.setText(station.tuneInId.orEmpty())
-                    statusView.text = "Editing ${station.alias}"
+                    MobileUi.setStatus(statusView, "Editing ${station.alias}")
                     editorCard.post { scrollView.smoothScrollTo(0, editorCard.top) }
                 })
                 MobileUi.addWeighted(this, MobileUi.button(this@RadioStationsActivity, "Delete", MobileUi.ButtonKind.DANGER) {
@@ -186,7 +194,7 @@ class RadioStationsActivity : Activity() {
                 putExtra(RadioService.EXTRA_ALIAS, station.alias)
             },
         )
-        statusView.text = "Starting ${station.alias}…"
+        MobileUi.setStatus(statusView, "Starting ${station.alias}…")
         window.decorView.postDelayed({ refreshStatus() }, 900)
     }
 
@@ -196,7 +204,7 @@ class RadioStationsActivity : Activity() {
                 action = RadioService.ACTION_STOP
             },
         )
-        statusView.text = "Stopping radio…"
+        MobileUi.setStatus(statusView, "Stopping radio…")
         window.decorView.postDelayed({ refreshStatus() }, 300)
     }
 
@@ -243,7 +251,11 @@ class RadioStationsActivity : Activity() {
 
     private fun stepVolume(delta: Int) {
         val target = speakerAddress() ?: run {
-            statusView.text = "Configure the M5 address in WAM Bridge first."
+            MobileUi.setStatus(
+                statusView,
+                "Configure the M5 address in WAM Bridge first.",
+                MobileUi.StatusKind.ERROR,
+            )
             return
         }
         val appContext = applicationContext
@@ -255,7 +267,11 @@ class RadioStationsActivity : Activity() {
             if (current == null) {
                 runOnUiThread {
                     volumeView.text = "volume ?"
-                    statusView.text = "Could not read the speaker volume."
+                    MobileUi.setStatus(
+                        statusView,
+                        "Could not read the speaker volume.",
+                        MobileUi.StatusKind.ERROR,
+                    )
                 }
                 return@Thread
             }
@@ -277,8 +293,11 @@ class RadioStationsActivity : Activity() {
                         volumeView.text = "volume $wanted/${SamsungWamChannel.MAX_VOLUME_STEP}"
                     },
                     onFailure = { error ->
-                        statusView.text =
-                            "Could not set volume: ${error.message ?: error.javaClass.simpleName}"
+                        MobileUi.setStatus(
+                            statusView,
+                            "Could not set volume: ${error.message ?: error.javaClass.simpleName}",
+                            MobileUi.StatusKind.ERROR,
+                        )
                     },
                 )
             }
@@ -286,11 +305,14 @@ class RadioStationsActivity : Activity() {
     }
 
     private fun refreshStatus() {
-        statusView.text = if (RadioService.running) {
-            "● ${RadioService.lastStatus}"
-        } else {
-            "○ ${RadioService.lastStatus}"
-        }
+        MobileUi.setStatus(
+            statusView,
+            if (RadioService.running) {
+                "● ${RadioService.lastStatus}"
+            } else {
+                "○ ${RadioService.lastStatus}"
+            },
+        )
     }
 
     companion object {
